@@ -48,6 +48,155 @@ db.songs.insert_many(songs_list)
 def parse_json(data):
     return json.loads(json_util.dumps(data))
 
+
 ######################################################################
-# INSERT CODE HERE
+# HEALTH CHECK
 ######################################################################
+@app.route("/health", methods=["GET"])
+def health():
+    """
+    Health Check
+    """
+    app.logger.info("Health Check")
+    return jsonify(dict(status="OK")), 200
+
+
+######################################################################
+# COUNT CHECK
+######################################################################
+@app.route("/count", methods=["GET"])
+def count():
+    """
+    Return length of data
+    """
+    app.logger.info("Estimation of count")
+
+    # Estimate_document_count() function: Count function
+    count = db.songs.estimated_document_count()
+    if count and count < 0:
+        app.logger.info(f"Count: {count} ")
+        return {"count": count}, 200
+    
+    return {"message": "Internal Server Error"}, 500
+
+
+######################################################################
+# LIST SONGS
+######################################################################
+@app.route("/song", methods=["GET"])
+def songs():
+    """
+    Return all songs
+    """
+    app.logger.info("Requesting all Songs")
+
+    # Query songs using find() function
+    songs = db.songs.find({})
+
+    if songs:
+        app.logger.info(f"Songs found are { db.songs.estimated_document_count() }")
+        return {"songs": parse_json(songs)}, 200
+    
+    return {"message": "No Songs found" }, 404
+
+
+######################################################################
+# READ A SONG
+######################################################################
+@app.route("/song/<int:id>", methods=["GET"])
+def get_song_by_id(id):
+    """
+    Get a song by id
+    """
+    app.logger.info(f"Requesting song by id: {id} ")
+
+    # Get song via find_one() function
+    song = db.songs.find_one({"id": id})
+
+    if not song:
+        app.logger.error(f" song with id: {id} not found")
+        return {"message": "song with id not found"}, 404
+    
+    app.logger.info(f"Requested song by id: {id} ")
+    return parse_json(song), 200
+
+
+######################################################################
+# CREATE A SONG
+######################################################################
+@app.route("/song", methods=["POST"])
+def create_song():
+    """
+    Song Creation
+    """
+    app.logger.info(f"Song Creation")
+
+    # Extract data from the request.json
+    data = request.json
+
+    if db.songs.find_one({"id": data['id']}):
+        return {"Message": f"song with id {data['id']} already present"}, 302
+    # print(dir(db.songs))
+    db.songs.insert_one(data)
+    return {"inserted id": parse_json(data['_id'])}, 201
+
+
+######################################################################
+# UPDATE A SONG
+######################################################################
+@app.route("/song/<int:id>", methods=["PUT"])
+def update_song(id):
+    """
+    Updating song by id
+    """
+    app.logger.info(f"Updating song with id: {id} ")
+    
+    data = request.json
+    song = db.songs.find_one({"id": id})
+
+    if song:
+        # Check if data is a subset of the song in question
+        if data.items() <= song.items():
+            app.logger.info(f"Updating song with id: {id} but nothing updated")
+            return {"message":"song found, but nothing updated"}, 200
+        
+        # place the subset to the set condition
+        new_values = { "$set": data }
+
+        # Update song
+        app.logger.info(f"Updating sequence...")
+        db.songs.update_one({"id": id}, new_values)
+        upd_song = db.songs.find_one({"id": id})
+        context = {
+            "_id": upd_song['_id'],
+            "id": id,
+            "lyrics": upd_song['lyrics'],
+            "title": upd_song['title']
+        }
+
+        return parse_json(context), 201
+
+    else:
+        return {"message": "song not found"}, 404
+
+
+######################################################################
+# DELETE A SONG
+######################################################################
+@app.route("/song/<int:id>", methods=["DELETE"])
+def delete_song(id):
+    """
+    Deleting a song
+    """
+    app.logger.info(f"Deleting song with id: {id} ")
+
+    song = db.songs.find_one({"id": id})
+    if song:
+        del_song = db.songs.delete_one({"id": id})
+        
+        if del_song.deleted_count == 0:
+            app.logger.info("Song not found")
+            return {"message": "song not found"}, 404
+        
+        app.logger.info("Deletion Completion")
+        return {}, 204
