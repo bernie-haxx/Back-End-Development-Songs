@@ -167,14 +167,8 @@ def update_song(id):
         app.logger.info(f"Updating sequence...")
         db.songs.update_one({"id": id}, new_values)
         upd_song = db.songs.find_one({"id": id})
-        context = {
-            "_id": upd_song['_id'],
-            "id": id,
-            "lyrics": upd_song['lyrics'],
-            "title": upd_song['title']
-        }
-
-        return parse_json(context), 201
+        
+        return parse_json(upd_song), 201
 
     else:
         return {"message": "song not found"}, 404
@@ -200,3 +194,5 @@ def delete_song(id):
         
         app.logger.info("Deletion Completion")
         return {}, 204
+    
+    return {"message": "song not found"}, 404
